@@ -1,8 +1,5 @@
 /**
- * App.jsx v3
- * Key fix: roomCode is stored separately in a ref so it never goes stale
- * even after socket reconnects. GameRoom always reads the live roomCode
- * from the ref, preventing "Room not found" errors.
+ * App.jsx v5 — voiceEnabled state lives here, passed to Home + GameRoom
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import socket from './socket';
@@ -12,27 +9,22 @@ import GameRoom from './GameRoom.jsx';
 import { sounds } from './sounds.js';
 
 export default function App() {
-  const [view,      setView]      = useState('home');
-  const [room,      setRoom]      = useState(null);
-  const [myName,    setMyName]    = useState('');
-  const [myId,      setMyId]      = useState('');
-  const [error,     setError]     = useState('');
-  const [connected, setConnected] = useState(socket.connected);
+  const [view,         setView]         = useState('home');
+  const [room,         setRoom]         = useState(null);
+  const [myName,       setMyName]       = useState('');
+  const [myId,         setMyId]         = useState('');
+  const [error,        setError]        = useState('');
+  const [connected,    setConnected]    = useState(socket.connected);
+  const [voiceEnabled, setVoiceEnabled] = useState(false); // user opt-in on home page
 
-  // roomCode stored in ref — never stale, survives reconnects
   const roomCodeRef = useRef('');
 
-  // Track socket id — updates on reconnect
   useEffect(() => {
     const onConnect = () => {
       setConnected(true);
       setMyId(socket.id);
-      // If we were in a room, rejoin automatically
       if (roomCodeRef.current && myName) {
-        socket.emit('joinRoom', {
-          roomCode:   roomCodeRef.current,
-          playerName: myName,
-        });
+        socket.emit('joinRoom', { roomCode: roomCodeRef.current, playerName: myName });
       }
     };
     const onDisconnect = () => setConnected(false);
@@ -45,45 +37,26 @@ export default function App() {
     };
   }, [myName]);
 
-  // Global socket listeners
   useEffect(() => {
     const onError = ({ message }) => {
       setError(message);
       sounds.error();
       setTimeout(() => setError(''), 4000);
     };
-
     const onRoomCreated = ({ room }) => {
       roomCodeRef.current = room.code;
-      setRoom(room);
-      setView('lobby');
-      sounds.join();
+      setRoom(room); setView('lobby'); sounds.join();
     };
-
     const onRoomJoined = ({ room }) => {
       roomCodeRef.current = room.code;
       setRoom(room);
-      // If game is already running (rejoining mid-game), go straight to game
       if (room.state !== 'lobby') setView('game');
       else setView('lobby');
       sounds.join();
     };
-
-    const onPlayerJoined = ({ room }) => {
-      setRoom(room);
-      sounds.join();
-    };
-
-    const onPlayerLeft = ({ room }) => {
-      setRoom(room);
-      if (room.state === 'lobby') setView('lobby');
-    };
-
-    const onGameStarted = ({ room }) => {
-      setRoom(room);
-      setView('game');
-      sounds.start();
-    };
+    const onPlayerJoined = ({ room }) => { setRoom(room); sounds.join(); };
+    const onPlayerLeft   = ({ room }) => { setRoom(room); if (room.state === 'lobby') setView('lobby'); };
+    const onGameStarted  = ({ room }) => { setRoom(room); setView('game'); sounds.start(); };
 
     socket.on('error',        onError);
     socket.on('roomCreated',  onRoomCreated);
@@ -102,7 +75,7 @@ export default function App() {
     };
   }, []);
 
-  const clearError = useCallback(() => setError(''), []);
+  const clearError  = useCallback(() => setError(''), []);
   const effectiveId = myId || socket.id;
 
   return (
@@ -113,33 +86,28 @@ export default function App() {
         </div>
       )}
       {error && (
-        <div
-          onClick={clearError}
+        <div onClick={clearError}
           className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-danger/90 text-paper
                      font-mono px-6 py-3 border border-danger animate-slide-up cursor-pointer
-                     max-w-xs w-11/12 text-center text-sm tracking-wide"
-        >
+                     max-w-xs w-11/12 text-center text-sm tracking-wide">
           ⚡ {error}
         </div>
       )}
 
       {view === 'home' && (
-        <Home myName={myName} setMyName={setMyName} />
+        <Home
+          myName={myName} setMyName={setMyName}
+          voiceEnabled={voiceEnabled} setVoiceEnabled={setVoiceEnabled}
+        />
       )}
       {view === 'lobby' && room && (
-        <Lobby
-          room={room}
-          setRoom={setRoom}
-          myId={effectiveId}
-          roomCodeRef={roomCodeRef}
-        />
+        <Lobby room={room} setRoom={setRoom} myId={effectiveId} roomCodeRef={roomCodeRef} />
       )}
       {view === 'game' && room && (
         <GameRoom
-          room={room}
-          setRoom={setRoom}
-          myId={effectiveId}
-          roomCodeRef={roomCodeRef}
+          room={room} setRoom={setRoom}
+          myId={effectiveId} roomCodeRef={roomCodeRef}
+          voiceEnabled={voiceEnabled}
         />
       )}
     </div>

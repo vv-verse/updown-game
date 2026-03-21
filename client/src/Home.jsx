@@ -1,5 +1,6 @@
 /**
- * Home.jsx v3 — mobile friendly, same timer config
+ * Home.jsx v5 — voice chat opt-in toggle added
+ * voiceEnabled is passed up to App so GameRoom can use it
  */
 import { useState } from 'react';
 import socket from './socket';
@@ -13,7 +14,7 @@ const TIMER_OPTIONS = [
   { label: 'Custom',   value: -1 },
 ];
 
-export default function Home({ myName, setMyName }) {
+export default function Home({ myName, setMyName, voiceEnabled, setVoiceEnabled }) {
   const [tab,         setTab]         = useState('create');
   const [joinCode,    setJoinCode]    = useState('');
   const [rangeMin,    setRangeMin]    = useState(1);
@@ -69,6 +70,53 @@ export default function Home({ myName, setMyName }) {
             maxLength={20}
             autoComplete="off"
           />
+        </div>
+
+        {/* ── Voice Chat Option ───────────────────────────────────── */}
+        <div
+          onClick={() => setVoiceEnabled(v => !v)}
+          style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'12px 16px', marginBottom:20, cursor:'pointer',
+            border: voiceEnabled ? '1px solid rgba(200,255,0,0.5)' : '1px solid rgba(245,240,232,0.12)',
+            background: voiceEnabled ? 'rgba(200,255,0,0.06)' : 'rgba(245,240,232,0.03)',
+            borderRadius:6, transition:'all 0.2s', userSelect:'none',
+          }}
+        >
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            {/* Mic icon */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke={voiceEnabled ? '#c8ff00' : 'rgba(245,240,232,0.4)'}
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3"/>
+              <path d="M5 10a7 7 0 0 0 14 0"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+            <div>
+              <p style={{ fontFamily:'monospace', fontSize:13, fontWeight:500, color: voiceEnabled ? '#c8ff00' : 'rgba(245,240,232,0.7)', letterSpacing:1 }}>
+                Voice Chat
+              </p>
+              <p style={{ fontFamily:'monospace', fontSize:10, color:'rgba(245,240,232,0.35)', marginTop:2 }}>
+                {voiceEnabled ? 'On — mic permission asked when you join' : 'Off — text chat only'}
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle pill */}
+          <div style={{
+            width:40, height:22, borderRadius:11, flexShrink:0,
+            background: voiceEnabled ? '#c8ff00' : 'rgba(245,240,232,0.15)',
+            position:'relative', transition:'background 0.2s',
+          }}>
+            <div style={{
+              position:'absolute', top:3,
+              left: voiceEnabled ? 21 : 3,
+              width:16, height:16, borderRadius:'50%',
+              background: voiceEnabled ? '#0a0a0f' : 'rgba(245,240,232,0.5)',
+              transition:'left 0.2s',
+            }} />
+          </div>
         </div>
 
         {/* Tabs */}

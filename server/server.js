@@ -1,5 +1,12 @@
 /**
- * server.js v2 — configurable per-room timer + chat
+ * server.js v5 — game logic + WebRTC signaling relay for voice chat
+ *
+ * WebRTC signaling events (client → server → peer):
+ *   signal-offer   { roomCode, toId, offer }      → signal-offer  { fromId, offer }
+ *   signal-answer  { toId, answer }               → signal-answer { fromId, answer }
+ *   signal-ice     { toId, candidate }            → signal-ice    { fromId, candidate }
+ *   voice-joined   { roomCode }                   → voice-joined  { fromId, playerName }  (broadcast)
+ *   voice-left     { roomCode }                   → voice-left    { fromId }              (broadcast)
  */
 
 const express    = require('express');
@@ -37,7 +44,6 @@ function broadcastRoom(roomCode, event, extra = {}) {
   io.to(roomCode).emit(event, { room: publicRoom(room), ...extra });
 }
 
-// Per-room timers
 const roomTimers = new Map();
 
 function startTurnTimer(roomCode) {
@@ -64,6 +70,8 @@ function clearTurnTimer(roomCode) {
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
+
+  // ── GAME EVENTS ──────────────────────────────────────────────────
 
   socket.on('createRoom', ({ playerName, range, timerSeconds }) => {
     try {
@@ -197,7 +205,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Chat
   socket.on('sendChat', ({ roomCode, message }) => {
     try {
       const room = getRoom(roomCode);
@@ -227,6 +234,8 @@ io.on('connection', (socket) => {
     const room = getRoomByPlayerId(socket.id);
     if (!room) return;
     const roomCode = room.code;
+    // Notify voice peers this player left voice
+    socket.to(roomCode).emit('voice-left', { fromId: socket.id });
     const updatedRoom = removePlayer(socket.id);
     if (!updatedRoom) { clearTurnTimer(roomCode); return; }
     if (updatedRoom.state === 'picking' || updatedRoom.state === 'guessing') {
@@ -234,6 +243,42 @@ io.on('connection', (socket) => {
       if (updatedRoom.players.length < 2) { updatedRoom.state = 'lobby'; clearTurnTimer(roomCode); }
     }
     io.to(roomCode).emit('playerLeft', { room: publicRoom(updatedRoom) });
+  });
+
+  // ── WEBRTC SIGNALING (pure relay — server never sees audio) ─────
+
+  // A player joins voice chat — tell everyone else so they can call them
+  socket.on('voice-joined', ({ roomCode }) => {
+    const room = getRoom(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) return;
+    // Tell all OTHER players in the room that this person is now in voice
+    socket.to(roomCode).emit('voice-joined', {
+      fromId:     socket.id,
+      playerName: player.name,
+    });
+    console.log(`[voice-joined] ${player.name} in ${roomCode}`);
+  });
+
+  // A player leaves voice chat
+  socket.on('voice-left', ({ roomCode }) => {
+    socket.to(roomCode).emit('voice-left', { fromId: socket.id });
+  });
+
+  // Relay WebRTC offer (caller → callee)
+  socket.on('signal-offer', ({ toId, offer }) => {
+    io.to(toId).emit('signal-offer', { fromId: socket.id, offer });
+  });
+
+  // Relay WebRTC answer (callee → caller)
+  socket.on('signal-answer', ({ toId, answer }) => {
+    io.to(toId).emit('signal-answer', { fromId: socket.id, answer });
+  });
+
+  // Relay ICE candidate (either direction)
+  socket.on('signal-ice', ({ toId, candidate }) => {
+    io.to(toId).emit('signal-ice', { fromId: socket.id, candidate });
   });
 });
 
