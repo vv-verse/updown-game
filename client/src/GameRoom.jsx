@@ -595,7 +595,7 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
           background:'rgba(245,240,232,0.03)', flexShrink:0,
         }}>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-            <span style={{ fontFamily:'monospace', fontSize:24, color:'#c8ff00', letterSpacing:3, fontWeight:'bold' }}>
+            <span style={{ fontFamily:'monospace', fontSize:30, color:'#c8ff00', letterSpacing:3, fontWeight:'bold' }}>
               UP DOWN
             </span>
             <span style={{ fontFamily:'monospace', fontSize:12, color:'rgba(245,240,232,0.3)', letterSpacing:2 }}>
