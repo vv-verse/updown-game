@@ -1,5 +1,5 @@
 /**
- * Home.jsx v2 — configurable timer when creating a room
+ * Home.jsx v3 — mobile friendly, same timer config
  */
 import { useState } from 'react';
 import socket from './socket';
@@ -43,50 +43,53 @@ export default function Home({ myName, setMyName }) {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
+    <div className="flex-1 flex items-center justify-center px-5 py-10">
+      <div className="w-full max-w-sm">
 
-        <div className="mb-10 text-center">
-          <h1 className="font-display text-8xl tracking-wider text-acid leading-none">
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <h1 className="font-display text-7xl tracking-wider text-acid leading-none">
             UP<br />DOWN
           </h1>
-          <p className="font-mono text-paper/50 text-sm tracking-widest mt-2 uppercase">
+          <p className="font-mono text-paper/50 text-xs tracking-widest mt-2 uppercase">
             Multiplayer Number Guess
           </p>
         </div>
 
-        <div className="mb-6">
+        {/* Name */}
+        <div className="mb-5">
           <label className="font-mono text-xs text-paper/50 tracking-widest uppercase block mb-2">
             Your Name
           </label>
           <input
-            className="input-field text-lg"
+            className="input-field text-base"
             placeholder="Enter your name…"
             value={myName}
             onChange={e => setMyName(e.target.value)}
             maxLength={20}
+            autoComplete="off"
           />
         </div>
 
-        <div className="flex mb-6 border-b border-paper/10">
+        {/* Tabs */}
+        <div className="flex mb-5 border-b border-paper/10">
           {['create', 'join'].map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 font-mono text-sm py-3 tracking-widest uppercase transition-colors
+              className={`flex-1 font-mono text-xs py-3 tracking-widest uppercase transition-colors
                 ${tab === t
                   ? 'text-acid border-b-2 border-acid -mb-px'
                   : 'text-paper/40 hover:text-paper/70'}`}
             >
-              {t === 'create' ? '+ Create Room' : '→ Join Room'}
+              {t === 'create' ? '+ Create' : '→ Join'}
             </button>
           ))}
         </div>
 
+        {/* Create */}
         {tab === 'create' && (
-          <form onSubmit={handleCreate} className="space-y-5 animate-slide-up">
-
-            {/* Range */}
+          <form onSubmit={handleCreate} className="space-y-4 animate-slide-up">
             <div>
               <label className="font-mono text-xs text-paper/50 tracking-widest uppercase block mb-2">
                 Number Range
@@ -94,18 +97,17 @@ export default function Home({ myName, setMyName }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-mono text-xs text-paper/30 block mb-1">Min</label>
-                  <input type="number" className="input-field" value={rangeMin}
+                  <input type="number" inputMode="numeric" className="input-field text-sm" value={rangeMin}
                     onChange={e => setRangeMin(e.target.value)} min={1} />
                 </div>
                 <div>
                   <label className="font-mono text-xs text-paper/30 block mb-1">Max</label>
-                  <input type="number" className="input-field" value={rangeMax}
+                  <input type="number" inputMode="numeric" className="input-field text-sm" value={rangeMax}
                     onChange={e => setRangeMax(e.target.value)} max={10000} />
                 </div>
               </div>
             </div>
 
-            {/* Timer */}
             <div>
               <label className="font-mono text-xs text-paper/50 tracking-widest uppercase block mb-2">
                 Turn Timer
@@ -116,49 +118,39 @@ export default function Home({ myName, setMyName }) {
                     key={opt.value}
                     type="button"
                     onClick={() => setTimerChoice(opt.value)}
-                    className={`font-mono text-xs py-2 px-2 border transition-all tracking-wider uppercase
+                    className={`font-mono text-xs py-2 px-1 border transition-all tracking-wide uppercase
                       ${timerChoice === opt.value
                         ? 'border-acid text-acid bg-acid/10'
-                        : 'border-paper/20 text-paper/50 hover:border-paper/40 hover:text-paper/70'}`}
+                        : 'border-paper/20 text-paper/50 hover:border-paper/40'}`}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
-
               {timerChoice === -1 && (
-                <div className="mt-3 flex items-center gap-3">
+                <div className="mt-2 flex items-center gap-2">
                   <input
-                    type="number"
-                    className="input-field w-28 text-center"
+                    type="number" inputMode="numeric"
+                    className="input-field w-24 text-center text-sm"
                     value={customSecs}
                     onChange={e => setCustomSecs(Math.max(10, Math.min(600, Number(e.target.value))))}
                     min={10} max={600}
-                    placeholder="seconds"
                   />
-                  <span className="font-mono text-paper/40 text-sm">seconds (10–600)</span>
+                  <span className="font-mono text-paper/40 text-xs">seconds</span>
                 </div>
               )}
-
-              <p className="font-mono text-xs text-paper/30 mt-2">
-                {finalSecs === 0
-                  ? '∞ No time limit — players guess at their own pace'
-                  : `⏱ ${finalSecs >= 60
-                      ? `${Math.floor(finalSecs / 60)}m${finalSecs % 60 > 0 ? ` ${finalSecs % 60}s` : ''}`
-                      : `${finalSecs}s`} per guessing round`}
+              <p className="font-mono text-xs text-paper/25 mt-2">
+                {finalSecs === 0 ? '∞ No time limit' : `⏱ ${finalSecs}s per round`}
               </p>
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary w-full animate-glow"
-              disabled={!myName.trim()}
-            >
+            <button type="submit" className="btn-primary w-full py-4 text-base" disabled={!myName.trim()}>
               Create Room
             </button>
           </form>
         )}
 
+        {/* Join */}
         {tab === 'join' && (
           <form onSubmit={handleJoin} className="space-y-4 animate-slide-up">
             <div>
@@ -166,16 +158,18 @@ export default function Home({ myName, setMyName }) {
                 Room Code
               </label>
               <input
-                className="input-field text-2xl text-center tracking-[0.5em] uppercase"
+                className="input-field text-3xl text-center tracking-[0.4em] uppercase"
                 placeholder="XXXXXX"
                 value={joinCode}
                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
                 maxLength={6}
+                autoComplete="off"
+                autoCapitalize="characters"
               />
             </div>
             <button
               type="submit"
-              className="btn-primary w-full"
+              className="btn-primary w-full py-4 text-base"
               disabled={!myName.trim() || joinCode.length !== 6}
             >
               Join Room
@@ -183,8 +177,8 @@ export default function Home({ myName, setMyName }) {
           </form>
         )}
 
-        <p className="text-center text-paper/20 font-mono text-xs mt-10 tracking-widest">
-          2 – 6 PLAYERS · REAL-TIME MULTIPLAYER
+        <p className="text-center text-paper/20 font-mono text-xs mt-8 tracking-widest">
+          2–6 PLAYERS · REAL-TIME
         </p>
       </div>
     </div>
