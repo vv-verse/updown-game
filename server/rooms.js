@@ -50,8 +50,9 @@ function generateRoomCode() {
  * @param {string} hostId   - socket.id of creator
  * @param {string} hostName - display name of creator
  * @param {{ min: number, max: number }} range - guess range
+ * @param {number} timerSeconds - 0 = no timer, otherwise seconds per turn
  */
-function createRoom(hostId, hostName, range = { min: 1, max: 1000 }) {
+function createRoom(hostId, hostName, range = { min: 1, max: 1000 }, timerSeconds = 60) {
   const code = generateRoomCode();
   const room = {
     code,
@@ -63,7 +64,9 @@ function createRoom(hostId, hostName, range = { min: 1, max: 1000 }) {
     pickerIndex: 0,
     secretNumber: null,
     range,
+    timerSeconds,   // stored so all clients know the setting
     guessHistory: [],
+    chatMessages: [], // chat log
     roundWinnerId: null,
     timerEnd: null,
   };
