@@ -133,7 +133,6 @@ function ScoresPanel({ room, myId, picker, colorMap, lo, hi, timerLabel }) {
         </p>
         {[
           ['Range',  <span style={{ color:'#c8ff00', fontWeight:'bold' }}>{room.range.min} – {room.range.max}</span>],
-          ...(room.guessHistory?.length > 0 ? [['Window', <span style={{ color:'#00ffcc', fontWeight:'bold' }}>{lo} – {hi}</span>]] : []),
           ['Timer',  timerLabel],
           ['Room',   room.code],
         ].map(([k,v]) => (
@@ -148,16 +147,30 @@ function ScoresPanel({ room, myId, picker, colorMap, lo, hi, timerLabel }) {
 }
 
 // ── Chat Panel (reused in both desktop sidebar and mobile tab) ────────
-function ChatPanel({ chatMessages, chatInput, setChatInput, sendChat, sendEmoji, chatEndRef, myId, isDesktop }) {
-  // Font sizes scale up on desktop
-  const msgFont  = isDesktop ? 16 : 15;
-  const nameFont = isDesktop ? 13 : 12;
+function ChatPanel({ chatMessages, chatInput, setChatInput, sendChat, sendEmoji, myId, isDesktop }) {
+  const msgFont   = isDesktop ? 16 : 15;
+  const nameFont  = isDesktop ? 13 : 12;
   const inputFont = isDesktop ? 15 : 14;
+  const scrollRef = useRef(null);
+
+  // Scroll to bottom only when a NEW message arrives, not when typing
+  const prevCount = useRef(chatMessages.length);
+  useEffect(() => {
+    if (chatMessages.length !== prevCount.current) {
+      prevCount.current = chatMessages.length;
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }
+  }, [chatMessages.length]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
       {/* Messages */}
-      <div style={{ flex:1, overflow:'auto', padding: isDesktop ? '16px 20px' : '12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
+      <div
+        ref={scrollRef}
+        style={{ flex:1, overflow:'auto', padding: isDesktop ? '16px 20px' : '12px 16px', display:'flex', flexDirection:'column', gap:10 }}
+      >
         {chatMessages.length === 0 && (
           <p style={{ fontFamily:'monospace', fontSize: nameFont, color:'rgba(245,240,232,0.2)', textAlign:'center', marginTop:24 }}>
             No messages yet. Say hi! 👋
@@ -182,7 +195,6 @@ function ChatPanel({ chatMessages, chatInput, setChatInput, sendChat, sendEmoji,
             </span>
           </div>
         ))}
-        <div ref={chatEndRef} />
       </div>
 
       {/* Emoji bar */}
@@ -350,7 +362,7 @@ function GamePanel({
         <div>
           {isHost ? (
             <button className="btn-primary"
-              style={{ padding: isDesktop ? '14px 40px' : '14px 100%', width: isDesktop ? 'auto' : '100%', fontSize: isDesktop ? 16 : 15 }}
+              style={{ padding:'14px 32px', fontSize: isDesktop ? 16 : 15, display:'inline-block', whiteSpace:'nowrap' }}
               onClick={handleNextRound}>
               Next Round →
             </button>
@@ -425,7 +437,6 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  const chatEndRef   = useRef(null);
   const guessInputRef = useRef(null);
 
   const picker   = room.players[room.pickerIndex];
@@ -493,7 +504,6 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
         if (!onChat) setUnread(u => u + 1);
         return prev;
       });
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
     };
 
     socket.on('playerLeft',     onPlayerLeft);
@@ -573,7 +583,7 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
   };
   const chatProps = {
     chatMessages, chatInput, setChatInput, sendChat, sendEmoji,
-    chatEndRef, myId,
+    myId,
   };
 
   // ── DESKTOP LAYOUT (3 columns) ────────────────────────────────────
@@ -595,7 +605,7 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
           background:'rgba(245,240,232,0.03)', flexShrink:0,
         }}>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-            <span style={{ fontFamily:'monospace', fontSize:28, color:'#c8ff00', letterSpacing:3, fontWeight:'bold' }}>
+            <span style={{ fontFamily:'monospace', fontSize:24, color:'#c8ff00', letterSpacing:3, fontWeight:'bold' }}>
               UP DOWN
             </span>
             <span style={{ fontFamily:'monospace', fontSize:12, color:'rgba(245,240,232,0.3)', letterSpacing:2 }}>
