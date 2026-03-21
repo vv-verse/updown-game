@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    @apply bg-ink text-paper font-body;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(200,255,0,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,255,204,0.03) 0%, transparent 60%);
+  }
+  input, button { font-family: inherit; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-acid text-ink font-mono font-bold px-6 py-3 rounded-none
+           border-2 border-acid hover:bg-ink hover:text-acid
+           transition-all duration-200 active:scale-95 tracking-wider uppercase;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-paper font-mono px-6 py-3 rounded-none
+           border-2 border-paper/30 hover:border-acid hover:text-acid
+           transition-all duration-200 active:scale-95 tracking-wider uppercase;
+  }
+  .btn-danger {
+    @apply bg-danger text-paper font-mono font-bold px-6 py-3 rounded-none
+           border-2 border-danger hover:bg-ink hover:text-danger
+           transition-all duration-200 active:scale-95 tracking-wider uppercase;
+  }
+  .input-field {
+    @apply bg-ink/60 text-paper border-2 border-paper/20 focus:border-acid
+           outline-none px-4 py-3 font-mono w-full transition-colors duration-200
+           placeholder:text-paper/30 rounded-none;
+  }
+  .card {
+    @apply bg-paper/5 border border-paper/10 p-6;
+  }
+  .tag-up {
+    @apply bg-neon/20 text-neon border border-neon/40 font-mono font-bold
+           px-3 py-1 text-sm tracking-widest;
+  }
+  .tag-down {
+    @apply bg-danger/20 text-danger border border-danger/40 font-mono font-bold
+           px-3 py-1 text-sm tracking-widest;
+  }
+  .tag-correct {
+    @apply bg-acid/20 text-acid border border-acid/40 font-mono font-bold
+           px-3 py-1 text-sm tracking-widest;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(200,255,0,0.3); }

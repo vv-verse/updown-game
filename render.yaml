@@ -1,0 +1,18 @@
+# render.yaml
+# Deploy the backend to Render with one click.
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: updown-game-server
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: FRONTEND_URL
+        sync: false   # fill in your Vercel URL after deploying frontend
