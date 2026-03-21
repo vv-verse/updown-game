@@ -372,66 +372,119 @@ function GamePanel({ room, myId, isPicker, isHost, picker, guess, setGuess, secr
   );
 }
 
+// ── Speaker icon SVG ─────────────────────────────────────────────────
+function SpeakerIcon({ size = 16, color = '#c8ff00' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+    </svg>
+  );
+}
+function SpeakerOffIcon({ size = 16, color = '#ffaa00' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <line x1="23" y1="9" x2="17" y2="15"/>
+      <line x1="17" y1="9" x2="23" y2="15"/>
+    </svg>
+  );
+}
+
+// ── Reusable icon toggle button ───────────────────────────────────────
+function IconBtn({ onClick, active, title, children, compact }) {
+  return (
+    <button onClick={onClick} title={title}
+      style={{
+        display:'flex', alignItems:'center', justifyContent:'center', gap: compact ? 0 : 5,
+        background: active ? 'rgba(255,170,0,0.12)' : 'rgba(200,255,0,0.07)',
+        border:     active ? '1px solid rgba(255,170,0,0.55)' : '1px solid rgba(200,255,0,0.35)',
+        borderRadius: compact ? '50%' : 5, cursor:'pointer',
+        padding: compact ? '6px' : '6px 11px',
+        width: compact ? 32 : 'auto', height: compact ? 32 : 'auto',
+        transition:'all 0.15s',
+      }}>
+      {children}
+    </button>
+  );
+}
+
 // ── Voice controls bar (shared between desktop and mobile) ────────────
-function VoiceBar({ inVoice, muted, voicePeers, joinVoice, leaveVoice, toggleMute, compact }) {
+function VoiceBar({ inVoice, micMuted, speakerMuted, voicePeers, joinVoice, leaveVoice, toggleMic, toggleSpeaker, compact }) {
+
+  // Not yet in call — show single Join button
   if (!inVoice) {
     return (
-      <button onClick={joinVoice}
+      <button onClick={joinVoice} title="Join voice chat"
         style={{
           display:'flex', alignItems:'center', gap: compact ? 0 : 6,
           background:'rgba(200,255,0,0.08)', border:'1px solid rgba(200,255,0,0.4)',
-          borderRadius: compact ? '50%' : 4, cursor:'pointer', transition:'all 0.15s',
+          borderRadius: compact ? '50%' : 4, cursor:'pointer',
           padding: compact ? '6px' : '6px 12px',
           width: compact ? 32 : 'auto', height: compact ? 32 : 'auto',
-          justifyContent:'center',
-        }}
-        title="Join voice chat"
-      >
+          justifyContent:'center', transition:'all 0.15s',
+        }}>
         <MicIcon size={compact ? 14 : 13} color="#c8ff00" />
-        {!compact && <span style={{ fontFamily:'monospace', fontSize:11, color:'#c8ff00', letterSpacing:1, textTransform:'uppercase' }}>Join Voice</span>}
+        {!compact && (
+          <span style={{ fontFamily:'monospace', fontSize:11, color:'#c8ff00', letterSpacing:1, textTransform:'uppercase' }}>
+            Join Voice
+          </span>
+        )}
       </button>
     );
   }
 
+  // In call — show mic + speaker toggles + peer count + end button
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-      {/* Mute toggle */}
-      <button onClick={toggleMute}
-        style={{
-          display:'flex', alignItems:'center', gap: compact ? 0 : 5,
-          background: muted ? 'rgba(255,170,0,0.12)' : 'rgba(200,255,0,0.08)',
-          border: muted ? '1px solid rgba(255,170,0,0.5)' : '1px solid rgba(200,255,0,0.4)',
-          borderRadius: compact ? '50%' : 4, cursor:'pointer',
-          padding: compact ? '6px' : '6px 10px',
-          width: compact ? 32 : 'auto', height: compact ? 32 : 'auto',
-          justifyContent:'center',
-        }}
-        title={muted ? 'Unmute' : 'Mute mic'}
-      >
-        {muted
+    <div style={{ display:'flex', alignItems:'center', gap: compact ? 5 : 6 }}>
+
+      {/* Mic toggle */}
+      <IconBtn onClick={toggleMic} active={micMuted} compact={compact}
+        title={micMuted ? 'Unmute mic' : 'Mute mic'}>
+        {micMuted
           ? <MicOffIcon size={compact ? 14 : 13} color="#ffaa00" />
-          : <MicIcon    size={compact ? 14 : 13} color="#c8ff00" />
-        }
+          : <MicIcon    size={compact ? 14 : 13} color="#c8ff00" />}
         {!compact && (
-          <span style={{ fontFamily:'monospace', fontSize:11, color: muted ? '#ffaa00' : '#c8ff00', letterSpacing:1, textTransform:'uppercase' }}>
-            {muted ? 'Unmute' : 'Muted?'}
+          <span style={{ fontFamily:'monospace', fontSize:11, color: micMuted ? '#ffaa00' : '#c8ff00', letterSpacing:1, textTransform:'uppercase' }}>
+            {micMuted ? 'Unmute' : 'Mic'}
           </span>
         )}
-      </button>
+      </IconBtn>
 
-      {/* Peer count badge */}
-      {Object.keys(voicePeers).length > 0 && (
-        <span style={{ fontFamily:'monospace', fontSize:11, color:'rgba(200,255,0,0.55)', whiteSpace:'nowrap' }}>
+      {/* Speaker toggle */}
+      <IconBtn onClick={toggleSpeaker} active={speakerMuted} compact={compact}
+        title={speakerMuted ? 'Unmute speaker' : 'Mute speaker'}>
+        {speakerMuted
+          ? <SpeakerOffIcon size={compact ? 14 : 13} color="#ffaa00" />
+          : <SpeakerIcon    size={compact ? 14 : 13} color="#c8ff00" />}
+        {!compact && (
+          <span style={{ fontFamily:'monospace', fontSize:11, color: speakerMuted ? '#ffaa00' : '#c8ff00', letterSpacing:1, textTransform:'uppercase' }}>
+            {speakerMuted ? 'Deafened' : 'Speaker'}
+          </span>
+        )}
+      </IconBtn>
+
+      {/* Peer count */}
+      {Object.keys(voicePeers).length > 0 && !compact && (
+        <span style={{ fontFamily:'monospace', fontSize:11, color:'rgba(200,255,0,0.5)', whiteSpace:'nowrap' }}>
           {Object.keys(voicePeers).length + 1} on call
         </span>
       )}
+      {Object.keys(voicePeers).length > 0 && compact && (
+        <span style={{ fontFamily:'monospace', fontSize:10, color:'rgba(200,255,0,0.5)' }}>
+          {Object.keys(voicePeers).length + 1}
+        </span>
+      )}
 
-      {/* End call */}
+      {/* End call — only on desktop (compact = mobile, no room) */}
       {!compact && (
         <button onClick={leaveVoice} style={{
           fontFamily:'monospace', fontSize:11, letterSpacing:1, textTransform:'uppercase',
-          background:'transparent', border:'1px solid rgba(245,240,232,0.2)',
-          color:'rgba(245,240,232,0.4)', padding:'6px 10px', cursor:'pointer', borderRadius:4,
+          background:'transparent', border:'1px solid rgba(255,51,102,0.35)',
+          color:'rgba(255,51,102,0.65)', padding:'6px 10px', cursor:'pointer', borderRadius:4,
         }}>End</button>
       )}
     </div>
@@ -461,7 +514,7 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
   }, []);
 
   // Voice chat hook — only active when user opted in
-  const { inVoice, muted, voicePeers, micError, joinVoice, leaveVoice, toggleMute }
+  const { inVoice, micMuted, speakerMuted, voicePeers, micError, joinVoice, leaveVoice, toggleMic, toggleSpeaker }
     = useVoiceChat(roomCodeRef, myId, room.players);
 
   const guessInputRef = useRef(null);
@@ -625,9 +678,9 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
             {room.timerEnd && <Timer timerEnd={room.timerEnd} />}
             {/* Voice controls */}
             {voiceEnabled && (
-              <VoiceBar inVoice={inVoice} muted={muted} voicePeers={voicePeers}
-                joinVoice={joinVoice} leaveVoice={leaveVoice} toggleMute={toggleMute}
-                compact={false} />
+              <VoiceBar inVoice={inVoice} micMuted={micMuted} speakerMuted={speakerMuted}
+                voicePeers={voicePeers} joinVoice={joinVoice} leaveVoice={leaveVoice}
+                toggleMic={toggleMic} toggleSpeaker={toggleSpeaker} compact={false} />
             )}
             {leaveBtn(false)}
           </div>
@@ -673,9 +726,9 @@ export default function GameRoom({ room: initialRoom, setRoom, myId, roomCodeRef
           {room.timerEnd && <Timer timerEnd={room.timerEnd} />}
           {/* Voice — compact icon buttons on mobile */}
           {voiceEnabled && (
-            <VoiceBar inVoice={inVoice} muted={muted} voicePeers={voicePeers}
-              joinVoice={joinVoice} leaveVoice={leaveVoice} toggleMute={toggleMute}
-              compact={true} />
+            <VoiceBar inVoice={inVoice} micMuted={micMuted} speakerMuted={speakerMuted}
+              voicePeers={voicePeers} joinVoice={joinVoice} leaveVoice={leaveVoice}
+              toggleMic={toggleMic} toggleSpeaker={toggleSpeaker} compact={true} />
           )}
           {leaveBtn(true)}
         </div>

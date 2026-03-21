@@ -1,20 +1,16 @@
 /**
- * useVoiceChat.js
+ * useVoiceChat.js v2
  *
- * WebRTC peer-to-peer voice chat hook.
+ * Adds speaker mute (deafen) on top of mic mute.
  *
- * How it works:
- *  1. When a player joins voice, they call getUserMedia to get their microphone.
- *  2. They tell the server "I'm in voice" (voice-joined event).
- *  3. The server tells all other players in the room.
- *  4. Each existing voice member creates a WebRTC PeerConnection and sends an offer.
- *  5. The new player answers each offer.
- *  6. ICE candidates are exchanged through the server as a relay.
- *  7. Once connected, audio flows directly peer-to-peer (server not involved).
+ *  toggleMute()    — mutes/unmutes YOUR microphone (others can't hear you)
+ *  toggleSpeaker() — mutes/unmutes incoming audio  (you can't hear others)
  *
- * ICE server: uses Google's public STUN server (free, no config needed).
- * For production with players behind strict NAT you may want a TURN server,
- * but STUN works for 85–90% of consumer connections.
+ * Speaker mute works by setting audio.muted = true on every remote Audio
+ * element. The WebRTC stream itself keeps flowing so unmuting is instant.
+ *
+ * All remote Audio elements are tracked in remoteAudiosRef so we can
+ * apply/remove speaker mute to connections that arrive after deafening.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -26,45 +22,67 @@ const ICE_SERVERS = [
 ];
 
 export function useVoiceChat(roomCodeRef, myId, players) {
-  const [inVoice,    setInVoice]    = useState(false);  // am I in the voice call?
-  const [muted,      setMuted]      = useState(false);  // is my mic muted?
-  const [voicePeers, setVoicePeers] = useState({});     // { socketId: { name, speaking } }
-  const [micError,   setMicError]   = useState('');     // e.g. "Permission denied"
+  const [inVoice,       setInVoice]       = useState(false);
+  const [micMuted,      setMicMuted]      = useState(false); // my mic off
+  const [speakerMuted,  setSpeakerMuted]  = useState(false); // incoming audio off
+  const [voicePeers,    setVoicePeers]    = useState({});    // { socketId: { name } }
+  const [micError,      setMicError]      = useState('');
 
-  // Refs — never cause re-renders, safe to read in callbacks
-  const localStreamRef = useRef(null);   // my microphone stream
-  const peersRef       = useRef({});     // { socketId: RTCPeerConnection }
-  const inVoiceRef     = useRef(false);  // mirror of inVoice for use in closures
+  const localStreamRef   = useRef(null);  // my microphone MediaStream
+  const peersRef         = useRef({});    // { socketId: RTCPeerConnection }
+  const remoteAudiosRef  = useRef({});    // { socketId: HTMLAudioElement }
+  const inVoiceRef       = useRef(false);
+  const speakerMutedRef  = useRef(false); // mirror for use inside callbacks
 
-  // Keep inVoiceRef in sync
-  useEffect(() => { inVoiceRef.current = inVoice; }, [inVoice]);
+  useEffect(() => { inVoiceRef.current = inVoice; },             [inVoice]);
+  useEffect(() => { speakerMutedRef.current = speakerMuted; },   [speakerMuted]);
 
-  // ── Create a peer connection to another player ──────────────────
+  // ── Remove one peer cleanly ───────────────────────────────────────
+  const removePeer = useCallback((peerId) => {
+    // Stop remote audio
+    if (remoteAudiosRef.current[peerId]) {
+      remoteAudiosRef.current[peerId].srcObject = null;
+      delete remoteAudiosRef.current[peerId];
+    }
+    // Close peer connection
+    const pc = peersRef.current[peerId];
+    if (pc) {
+      pc.close();
+      delete peersRef.current[peerId];
+    }
+    setVoicePeers(prev => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+  }, []);
+
+  // ── Create a WebRTC peer connection ───────────────────────────────
   const createPeer = useCallback((peerId, isInitiator) => {
-    // Clean up any old connection to this peer
     if (peersRef.current[peerId]) {
       peersRef.current[peerId].close();
     }
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    // Add our local audio tracks to the connection
+    // Send our mic audio to this peer
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current);
       });
     }
 
-    // When we receive the remote player's audio, play it
+    // Receive incoming audio from this peer
     pc.ontrack = (e) => {
       const audio = new Audio();
-      audio.srcObject = e.streams[0];
-      audio.autoplay = true;
-      // Store audio element on pc so we can clean it up later
-      pc._remoteAudio = audio;
+      audio.srcObject  = e.streams[0];
+      audio.autoplay   = true;
+      // Respect current speaker mute state when a new peer connects
+      audio.muted = speakerMutedRef.current;
+      remoteAudiosRef.current[peerId] = audio;
     };
 
-    // Relay our ICE candidates through the server
+    // Relay ICE candidates through the server
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         socket.emit('signal-ice', { toId: peerId, candidate: e.candidate });
@@ -79,47 +97,24 @@ export function useVoiceChat(roomCodeRef, myId, players) {
 
     peersRef.current[peerId] = pc;
 
-    // Initiator creates and sends the offer
+    // Initiator creates and sends offer
     if (isInitiator) {
       pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
-        .then(() => {
-          socket.emit('signal-offer', {
-            toId:  peerId,
-            offer: pc.localDescription,
-          });
-        })
+        .then(() => socket.emit('signal-offer', { toId: peerId, offer: pc.localDescription }))
         .catch(console.error);
     }
 
     return pc;
-  }, []);
+  }, [removePeer]);
 
-  // ── Remove a peer connection cleanly ───────────────────────────
-  const removePeer = useCallback((peerId) => {
-    const pc = peersRef.current[peerId];
-    if (pc) {
-      if (pc._remoteAudio) {
-        pc._remoteAudio.srcObject = null;
-        pc._remoteAudio = null;
-      }
-      pc.close();
-      delete peersRef.current[peerId];
-    }
-    setVoicePeers(prev => {
-      const next = { ...prev };
-      delete next[peerId];
-      return next;
-    });
-  }, []);
-
-  // ── Socket signaling listeners ─────────────────────────────────
+  // ── Socket signaling listeners ────────────────────────────────────
   useEffect(() => {
-    // Someone else joined voice — we are the initiator, send them an offer
+    // Someone else joined voice — we initiate the offer
     const onVoiceJoined = ({ fromId, playerName }) => {
       if (!inVoiceRef.current) return;
       setVoicePeers(prev => ({ ...prev, [fromId]: { name: playerName } }));
-      createPeer(fromId, true); // we initiate
+      createPeer(fromId, true);
     };
 
     // Someone left voice
@@ -127,10 +122,10 @@ export function useVoiceChat(roomCodeRef, myId, players) {
       removePeer(fromId);
     };
 
-    // We received an offer — answer it
+    // We received an offer — send back an answer
     const onOffer = async ({ fromId, offer }) => {
       if (!inVoiceRef.current) return;
-      const pc = createPeer(fromId, false); // we answer
+      const pc = createPeer(fromId, false);
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
@@ -141,14 +136,14 @@ export function useVoiceChat(roomCodeRef, myId, players) {
       }
     };
 
-    // We received an answer
+    // We received an answer to our offer
     const onAnswer = async ({ fromId, answer }) => {
       const pc = peersRef.current[fromId];
       if (!pc) return;
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
       } catch (err) {
-        console.error('[voice] setRemoteDescription answer error', err);
+        console.error('[voice] setRemoteDescription answer', err);
       }
     };
 
@@ -158,103 +153,103 @@ export function useVoiceChat(roomCodeRef, myId, players) {
       if (!pc) return;
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        // Non-fatal — can happen with timing
-      }
+      } catch (_) { /* non-fatal timing issue */ }
     };
 
-    socket.on('voice-joined',   onVoiceJoined);
-    socket.on('voice-left',     onVoiceLeft);
-    socket.on('signal-offer',   onOffer);
-    socket.on('signal-answer',  onAnswer);
-    socket.on('signal-ice',     onIce);
+    socket.on('voice-joined',  onVoiceJoined);
+    socket.on('voice-left',    onVoiceLeft);
+    socket.on('signal-offer',  onOffer);
+    socket.on('signal-answer', onAnswer);
+    socket.on('signal-ice',    onIce);
 
     return () => {
-      socket.off('voice-joined',   onVoiceJoined);
-      socket.off('voice-left',     onVoiceLeft);
-      socket.off('signal-offer',   onOffer);
-      socket.off('signal-answer',  onAnswer);
-      socket.off('signal-ice',     onIce);
+      socket.off('voice-joined',  onVoiceJoined);
+      socket.off('voice-left',    onVoiceLeft);
+      socket.off('signal-offer',  onOffer);
+      socket.off('signal-answer', onAnswer);
+      socket.off('signal-ice',    onIce);
     };
   }, [createPeer, removePeer]);
 
-  // ── Join voice chat ────────────────────────────────────────────
+  // ── Join voice ────────────────────────────────────────────────────
   const joinVoice = useCallback(async () => {
     setMicError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
         video: false,
       });
       localStreamRef.current = stream;
       setInVoice(true);
       inVoiceRef.current = true;
-
-      // Tell server (and via server, all other players in the room)
       socket.emit('voice-joined', { roomCode: roomCodeRef.current });
     } catch (err) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setMicError('Microphone permission denied. Please allow mic access in your browser.');
+        setMicError('Mic permission denied — please allow mic in your browser settings.');
       } else if (err.name === 'NotFoundError') {
-        setMicError('No microphone found. Please connect a microphone and try again.');
+        setMicError('No microphone found. Connect one and try again.');
       } else {
         setMicError('Could not access microphone: ' + err.message);
       }
     }
   }, [roomCodeRef]);
 
-  // ── Leave voice chat ───────────────────────────────────────────
+  // ── Leave voice ───────────────────────────────────────────────────
   const leaveVoice = useCallback(() => {
-    // Stop all local tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
       localStreamRef.current = null;
     }
-    // Close all peer connections
-    Object.keys(peersRef.current).forEach(peerId => removePeer(peerId));
+    Object.keys(peersRef.current).forEach(id => removePeer(id));
     setInVoice(false);
     inVoiceRef.current = false;
     setVoicePeers({});
-    setMuted(false);
+    setMicMuted(false);
+    setSpeakerMuted(false);
+    speakerMutedRef.current = false;
     socket.emit('voice-left', { roomCode: roomCodeRef.current });
   }, [roomCodeRef, removePeer]);
 
-  // ── Toggle mute ────────────────────────────────────────────────
-  const toggleMute = useCallback(() => {
+  // ── Toggle mic (mute/unmute your own microphone) ──────────────────
+  const toggleMic = useCallback(() => {
     if (!localStreamRef.current) return;
     localStreamRef.current.getAudioTracks().forEach(track => {
       track.enabled = !track.enabled;
     });
-    setMuted(m => !m);
+    setMicMuted(m => !m);
   }, []);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────
+  // ── Toggle speaker (mute/unmute all incoming audio) ───────────────
+  const toggleSpeaker = useCallback(() => {
+    const nowMuted = !speakerMutedRef.current;
+    speakerMutedRef.current = nowMuted;
+    // Apply to every existing remote audio element
+    Object.values(remoteAudiosRef.current).forEach(audio => {
+      audio.muted = nowMuted;
+    });
+    setSpeakerMuted(nowMuted);
+  }, []);
+
+  // ── Cleanup on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (inVoiceRef.current) {
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(t => t.stop());
-        }
-        Object.keys(peersRef.current).forEach(peerId => {
-          const pc = peersRef.current[peerId];
-          if (pc._remoteAudio) { pc._remoteAudio.srcObject = null; }
-          pc.close();
-        });
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
       }
+      Object.values(remoteAudiosRef.current).forEach(a => { a.srcObject = null; });
+      Object.values(peersRef.current).forEach(pc => pc.close());
     };
   }, []);
 
   return {
     inVoice,
-    muted,
-    voicePeers,   // { [socketId]: { name } }
+    micMuted,
+    speakerMuted,
+    voicePeers,
     micError,
     joinVoice,
     leaveVoice,
-    toggleMute,
+    toggleMic,
+    toggleSpeaker,
   };
 }
