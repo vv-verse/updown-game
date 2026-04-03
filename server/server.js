@@ -208,7 +208,9 @@ io.on('connection', function(socket) {
       socket.emit('duelPickConfirmed', { room: publicRoom(room) });
       var p0 = room.players[0]; var p1 = room.players[1];
       if (room.pickedBy[p0.id] && room.pickedBy[p1.id]) {
-        room.duelState = 'guessing'; room.duelTurnId = p0.id;
+        room.duelState = 'guessing';
+        // Alternate who goes first each round — odd round = p0, even round = p1
+        room.duelTurnId = (room.round % 2 === 1) ? p0.id : p1.id;
         startTurnTimer(data.roomCode);
         broadcastRoom(data.roomCode, 'duelBothPicked');
       } else {
